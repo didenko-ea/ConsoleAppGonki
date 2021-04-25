@@ -3,6 +3,8 @@ using System.Configuration;
 using System.Collections.Specialized;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace ConsoleAppGonki
 {
@@ -35,22 +37,55 @@ namespace ConsoleAppGonki
             Appset = null;
         }
     }
- 
-    class Car 
+    public class Itog
     {
+        public string Name { get; set; }
+    }
+    public class Itogset
+    {
+        public List<Itog> ItogList { get; set; }
+    }
+    public class StaticItog
+    {
+        private static Itogset Itogset = null;
+
+        public static Itogset GetItogSetting()
+        {
+            Itogset Itogset = new Itogset();
+            Itogset.ItogList = new List<Itog>();
+            return Itogset;
+        }
+        public static void LoadStaticItog()
+        {
+            Itogset = StaticItog.GetItogSetting();
+        }
+        public static void AddStaticItog(Itog itog)
+        {
+            Itogset = StaticItog.GetItogset();
+            Itogset.ItogList.Add(itog);
+        }
+        public static Itogset GetItogset()
+        {
+            return Itogset;
+        }
+        public static void SetItogsetNull()
+        {
+            Itogset = null;
+        }
+    }
+
+    class Car
+    {
+        public delegate void Start();
+        public delegate void Message();
+        public event Message Display;
         public string Name;
         public float Speed;
         public int Prc;
 
-        public void setValues(string Name,float Speed, int Prc)
+        public virtual string getValues()
         {
-            this.Name = Name;
-            this.Speed = Speed;
-            this.Prc = Prc;
-        }
-        public virtual string getValues() 
-        {
-            return this.Name + ", ск: " + this.Speed + ", в/пр: " + this.Prc;
+            return this.Name + ", ск: " + this.Speed + "км/ч, в/пр: " + this.Prc + "%";
         }
         public Car(string Name, float Speed, int Prc)
         {
@@ -58,7 +93,45 @@ namespace ConsoleAppGonki
             this.Speed = Speed;
             this.Prc = Prc;
         }
-        public Car() { } 
+        public float RandomSpeed(Random rnd, float speed)
+        {
+            return speed - rnd.Next((int)Math.Round(speed * 0.3));
+        }
+
+        public void MovingText(string stroka)
+        {
+            Console.Clear();
+            Console.WriteLine($"{stroka} ");
+        }
+
+        static bool Ve(int percent, Random rnd = null)
+        {
+            return rnd.Next(100 - percent) == 0;
+        }
+        public void Drive()
+        {
+            int nprokol = 0;
+            for (int i = 0; i <= Int32.Parse(StaticCache.GetAppset().SettingDict.FirstOrDefault().Value); i += 1)
+            {
+                Random rnd = new Random();
+                bool prokol = Ve(Prc, rnd);
+                string textProkol = "";
+                int sleepProkol = 0;
+                if (prokol)
+                {
+                    sleepProkol = 500;
+                    textProkol += " Прокол!!!";
+                    nprokol++;
+                }
+                Thread.Sleep(350 + sleepProkol - (int)Math.Round(RandomSpeed(new Random(), Speed)));
+                Display += () => MovingText(Name + " прошел расстояние " + i.ToString() + "км" + textProkol);
+                if (i == Int32.Parse(StaticCache.GetAppset().SettingDict.FirstOrDefault().Value))
+                {
+                    StaticItog.AddStaticItog(new Itog { Name = Name + (nprokol > 0 ? " (проколов: " + nprokol.ToString() + ")" : "") });
+                }
+                Display();
+            }
+        }
     }
 
     class Truck : Car
@@ -68,9 +141,9 @@ namespace ConsoleAppGonki
         {
             this.Carry = Carry;
         }
-       public override string getValues()
+        public override string getValues()
         {
-            return base.getValues()+ ", гр: " + Carry + "тн";
+            return base.getValues() + ", гр: " + Carry + "тн";
         }
     }
     class Sedan : Car
@@ -82,7 +155,7 @@ namespace ConsoleAppGonki
         }
         public override string getValues()
         {
-            return base.getValues()+ ", мест: " + Passangers;
+            return base.getValues() + ", мест: " + Passangers;
         }
     }
     class Moto : Car
@@ -94,10 +167,9 @@ namespace ConsoleAppGonki
         }
         public override string getValues()
         {
-            return base.getValues()+ ", коляск" + (Sidecar ? "а есть" : "и нет");
+            return base.getValues() + ", коляск" + (Sidecar ? "а есть" : "и нет");
         }
     }
-  
     class Program
     {
         static void Main(string[] args)
@@ -114,7 +186,7 @@ namespace ConsoleAppGonki
                 string[] subs = stroka.Split('/');
                 float speed = float.Parse(subs[0]);
                 int prc = Int32.Parse(subs[1]);
-                int dop = !String.IsNullOrEmpty(subs[2])? Int32.Parse(subs[2]):0;
+                int dop = !String.IsNullOrEmpty(subs[2]) ? Int32.Parse(subs[2]) : 0;
                 switch (s.Key.Substring(0, 4))
                 {
                     case "груз":
@@ -124,7 +196,7 @@ namespace ConsoleAppGonki
                         Cars.Add(new Sedan(s.Key, speed, prc, dop));
                         break;
                     case "мото":
-                        Cars.Add(new Moto(s.Key, speed, prc, dop==1?true:false));
+                        Cars.Add(new Moto(s.Key, speed, prc, dop == 1 ? true : false));
                         break;
                     default:
                         Cars.Add(new Car(s.Key, speed, prc));
@@ -136,7 +208,39 @@ namespace ConsoleAppGonki
             {
                 Console.WriteLine(car.getValues());
             }
-            Console.ReadLine();
+
+            ConsoleKey response;
+            Console.WriteLine("Стартуем? [y/n] ");
+            response = Console.ReadKey(true).Key;   
+            while (response == ConsoleKey.Y)
+            {
+                StaticItog.SetItogsetNull();
+                StaticItog.LoadStaticItog();
+                List<Thread> threads = new List<Thread>();
+                foreach (Car car in Cars)
+                {
+                    threads.Add(new Thread(car.Drive));
+                }
+                foreach (Thread list in threads)
+                {
+                    list.Start();
+                }
+                foreach (Thread list in threads)
+                {
+                    list.Join();
+                }
+                Console.Clear();
+                Console.WriteLine("Таблица первенства: ");
+                string[] ItogList=StaticItog.GetItogset().ItogList.Select(s=>s.Name).ToArray();
+                int j = 1;
+                foreach (string itog in ItogList)
+                {
+                    Console.WriteLine($"Место: {j}  {itog} ");
+                    j++;
+                }
+                Console.WriteLine("еще круг? [y/n] ");
+                response = Console.ReadKey(true).Key;
+            }
         }
     }
 }
