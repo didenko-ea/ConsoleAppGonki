@@ -4,7 +4,6 @@ using System.Collections.Specialized;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace ConsoleAppGonki
 {
@@ -77,31 +76,25 @@ namespace ConsoleAppGonki
     class Car
     {
         public delegate void Start();
-        public delegate void Message();
-        public event Message Display;
         public string Name;
         public float Speed;
         public int Prc;
+        public int Pozwrite;
 
         public virtual string getValues()
         {
             return this.Name + ", ск: " + this.Speed + "км/ч, в/пр: " + this.Prc + "%";
         }
-        public Car(string Name, float Speed, int Prc)
+        public Car(string Name, float Speed, int Prc, int Pozwrite)
         {
             this.Name = Name;
             this.Speed = Speed;
             this.Prc = Prc;
+            this.Pozwrite = Pozwrite;
         }
         public float RandomSpeed(Random rnd, float speed)
         {
             return speed - rnd.Next((int)Math.Round(speed * 0.3));
-        }
-
-        public void MovingText(string stroka)
-        {
-            Console.Clear();
-            Console.WriteLine($"{stroka} ");
         }
 
         static bool Ve(int percent, Random rnd = null)
@@ -110,26 +103,25 @@ namespace ConsoleAppGonki
         }
         public void Drive()
         {
-            int nprokol = 0;
-            for (int i = 0; i <= Int32.Parse(StaticCache.GetAppset().SettingDict.FirstOrDefault().Value); i += 1)
+            int lenKrug = Int32.Parse(StaticCache.GetAppset().SettingDict.FirstOrDefault().Value);
+            for (int i = 0; i <= Int32.Parse(StaticCache.GetAppset().SettingDict.FirstOrDefault().Value); i ++)
             {
                 Random rnd = new Random();
                 bool prokol = Ve(Prc, rnd);
-                string textProkol = "";
+                string textProkol = "          ";
                 int sleepProkol = 0;
                 if (prokol)
                 {
                     sleepProkol = 500;
-                    textProkol += " Прокол!!!";
-                    nprokol++;
+                    textProkol = " Прокол!!!";
                 }
                 Thread.Sleep(350 + sleepProkol - (int)Math.Round(RandomSpeed(new Random(), Speed)));
-                Display += () => MovingText(Name + " прошел расстояние " + i.ToString() + "км" + textProkol);
-                if (i == Int32.Parse(StaticCache.GetAppset().SettingDict.FirstOrDefault().Value))
+                Console.SetCursorPosition(0, Pozwrite + 1);
+                Console.WriteLine($"{Name}  прошел расстояние {i}км {textProkol}");
+                if (i == lenKrug)
                 {
-                    StaticItog.AddStaticItog(new Itog { Name = Name + (nprokol > 0 ? " (проколов: " + nprokol.ToString() + ")" : "") });
+                    StaticItog.AddStaticItog(new Itog { Name = Name  });
                 }
-                Display();
             }
         }
     }
@@ -137,7 +129,7 @@ namespace ConsoleAppGonki
     class Truck : Car
     {
         public int Carry;
-        public Truck(string Name, float Speed, int Prc, int Carry) : base(Name, Speed, Prc)
+        public Truck(string Name, float Speed, int Prc,int Pozwrite, int Carry) : base(Name, Speed, Prc,Pozwrite)
         {
             this.Carry = Carry;
         }
@@ -149,7 +141,7 @@ namespace ConsoleAppGonki
     class Sedan : Car
     {
         public int Passangers;
-        public Sedan(string Name, float Speed, int Prc, int Passangers) : base(Name, Speed, Prc)
+        public Sedan(string Name, float Speed, int Prc, int Pozwrite, int Passangers) : base(Name, Speed, Prc, Pozwrite)
         {
             this.Passangers = Passangers;
         }
@@ -161,7 +153,7 @@ namespace ConsoleAppGonki
     class Moto : Car
     {
         public bool Sidecar;
-        public Moto(string Name, float Speed, int Prc, bool Sidecar) : base(Name, Speed, Prc)
+        public Moto(string Name, float Speed, int Prc, int Pozwrite, bool Sidecar) : base(Name, Speed, Prc, Pozwrite)
         {
             this.Sidecar = Sidecar;
         }
@@ -190,16 +182,16 @@ namespace ConsoleAppGonki
                 switch (s.Key.Substring(0, 4))
                 {
                     case "груз":
-                        Cars.Add(new Truck(s.Key, speed, prc, dop));
+                        Cars.Add(new Truck(s.Key, speed, prc,i, dop));
                         break;
                     case "легк":
-                        Cars.Add(new Sedan(s.Key, speed, prc, dop));
+                        Cars.Add(new Sedan(s.Key, speed, prc,i, dop));
                         break;
                     case "мото":
-                        Cars.Add(new Moto(s.Key, speed, prc, dop == 1 ? true : false));
+                        Cars.Add(new Moto(s.Key, speed, prc, i, dop == 1 ? true : false));
                         break;
                     default:
-                        Cars.Add(new Car(s.Key, speed, prc));
+                        Cars.Add(new Car(s.Key, speed, prc, i));
                         break;
                 }
                 i++;
@@ -214,6 +206,9 @@ namespace ConsoleAppGonki
             response = Console.ReadKey(true).Key;   
             while (response == ConsoleKey.Y)
             {
+                Console.Clear();
+                Console.WriteLine(StaticCache.GetAppset().SettingDict.FirstOrDefault().Key + " " + StaticCache.GetAppset().SettingDict.FirstOrDefault().Value + "км");
+                Console.WriteLine("Участники: ");
                 StaticItog.SetItogsetNull();
                 StaticItog.LoadStaticItog();
                 List<Thread> threads = new List<Thread>();
@@ -230,6 +225,7 @@ namespace ConsoleAppGonki
                     list.Join();
                 }
                 Console.Clear();
+                Console.WriteLine(StaticCache.GetAppset().SettingDict.FirstOrDefault().Key + " " + StaticCache.GetAppset().SettingDict.FirstOrDefault().Value + "км");
                 Console.WriteLine("Таблица первенства: ");
                 string[] ItogList=StaticItog.GetItogset().ItogList.Select(s=>s.Name).ToArray();
                 int j = 1;
